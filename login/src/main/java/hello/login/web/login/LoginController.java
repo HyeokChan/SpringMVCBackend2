@@ -112,6 +112,7 @@ public class LoginController {
         return "redirect:/";
     }
 
+
     private void expiredCookie(HttpServletResponse response, String cookieName) {
         Cookie cookie = new Cookie(cookieName, null);
         cookie.setMaxAge(0);
