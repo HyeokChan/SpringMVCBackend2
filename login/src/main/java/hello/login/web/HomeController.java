@@ -72,7 +72,7 @@ public class HomeController {
     }
 
     @GetMapping("/")
-    public String homeLoginVSpring(@SessionAttribute(name = SessionConst.LOGIN_MEMBER, required = false) Member loginMember,
+    public String homeLoginV3Spring(@SessionAttribute(name = SessionConst.LOGIN_MEMBER, required = false) Member loginMember,
                                    Model model) {
         //세션에 회원데이터가 없으면 home
         if (loginMember == null) {
