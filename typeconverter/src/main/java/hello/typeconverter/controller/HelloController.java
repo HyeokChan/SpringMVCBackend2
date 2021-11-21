@@ -10,14 +10,17 @@ import javax.servlet.http.HttpServletRequest;
 public class HelloController {
     @GetMapping("/hello-v1")
     public String helloV1(HttpServletRequest request) {
-        String data = request.getParameter("data"); // 문자타입 조회
-        Integer intValue = Integer.valueOf(data);  // 숫자타입으로 변경
+        // 문자타입 조회
+        String data = request.getParameter("data");
+        // 숫자타입으로 변경
+        Integer intValue = Integer.valueOf(data);
         System.out.println("intValue = " + intValue);
         return "ok";
     }
     @GetMapping("/hello-v2")
     public String helloV2(@RequestParam Integer data) {
         System.out.println("data = " + data);
+
         return "ok";
     }
 
