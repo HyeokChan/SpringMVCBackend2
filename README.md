@@ -133,3 +133,122 @@
     application.properties > 
     server.servlet.session.timeout=1800
     ~~~
+
+### 로그인처리 - 필터, 인터셉터
+#### 서블릿 필터
+1. 필터 흐름 : http요청 -> WAS -> 필터 -> 서블릿 -> 컨트롤러
+2. 필터 인터페이스 Filter 메서드 
+    - init() : 필터 초기화 메서드, 서블릿 컨테이너가 생성될 때 호출
+    - doFilter() : 고객의 요청이 올 때마다 해당 메서드가 호출됨. 필터 로직 구현 부분
+    - destroy() : 필터 종료 메서드, 서블릿 컨테이너가 종료될 때 호출됨
+#### 스프링 인터셉터
+1. 스프링 인터셉터 흐름 : http요청 -> WAS -> 필터 -> 서블릿 -> 스프링 인터셉터 -> 컨트롤러
+2. 스프링 인터셉터 인터페이스 HandlerInterceptor 메서드
+    - preHandle() : 컨트롤러 호출 전에 호출됨
+    - postHandle() : 컨트롤러 호출 후에 호출됨
+    - afterCompletion() : 뷰가 렌더링 된 이후에 호출됨
+
+### 예외처리, 오류페이지
+#### 예외 동작
+1. 예외 동작 방식 : 컨트롤러(예외발생) -> 인터셉터 -> 서블릿 -> 필터 -> WAS
+2. 예외 발생 테스트 : 
+    - throw new xxxException(오류메시지) : 예외 발생 시킴
+    - response.sendError(HTTP상태코드, 오류메시지) : 서블릿 컨테이너에게 오류가 발생했음을 알림
+#### 오류화면 제공
+1. 서블릿 오류페이지 등록
+    ~~~
+    @Component
+      public class WebServerCustomizer implements
+      WebServerFactoryCustomizer<ConfigurableWebServerFactory> {
+          @Override
+          public void customize(ConfigurableWebServerFactory factory) {
+              ErrorPage errorPage404 = new ErrorPage(HttpStatus.NOT_FOUND, "/error-
+      page/404");
+              ErrorPage errorPage500 = new
+      ErrorPage(HttpStatus.INTERNAL_SERVER_ERROR, "/error-page/500");
+              ErrorPage errorPageEx = new ErrorPage(RuntimeException.class, "/error-
+      page/500");
+              factory.addErrorPages(errorPage404, errorPage500, errorPageEx);
+          }
+    }
+    ~~~
+    - 발생한 오류에 따라 에러 컨트롤러 호출
+2. 에러 컨트롤러 동작
+    ~~~
+    @Slf4j
+      @Controller
+      public class ErrorPageController {
+          @RequestMapping("/error-page/404")
+          public String errorPage404(HttpServletRequest request, HttpServletResponse
+      response) {
+              log.info("errorPage 404");
+              return "error-page/404";
+          }
+          @RequestMapping("/error-page/500")
+          public String errorPage500(HttpServletRequest request, HttpServletResponse
+      response) {
+              log.info("errorPage 500");
+              return "error-page/500";
+          }
+    }
+    ~~~
+    - 새로 작성한 에러 페이지 호출
+3. 에러페이지 처리 순서 : WAS에서 오류 감지 -> 에러페이지 확인 -> 필터 -> 서블릿 -> 인터셉터 -> 컨틀롤러(에러컨트롤러) -> View
+#### 서블릿 예외처리 - 필터
+1. 이미 확인한 인증 및 권한을 WAS에서 오류를 감지하고 필터, 인터셉터를 거쳐갈 때, 다시 체크하는 것은 비효율적임
+2. 필터, 인터셉터를 거쳐갈 때, 클라이언트로 부터 발생한 정상 요청인지, 오류페이지를 출력하기 위함인지 구별 필요
+3. DispatcherType의 추가정보를 통해 식별 가능
+4. DispatcherType
+    - REQUEST : 클라이언트 요청
+    - ERROR : 오류 요청
+    - FORWADR : 서블릿에서 다른 서블릿이나 JSP 호출
+    - INCLUDE : 서블릿에서 다른 서블릿이나 JSP의 결과를 포함
+    - ASYNC : 서블릿 비동기 호출
+5. 필터 설정
+    ~~~
+    FilterRegistrationBean<Filter> filterRegistrationBean = new
+      FilterRegistrationBean<>();
+              filterRegistrationBean.setFilter(new LogFilter());
+              filterRegistrationBean.setOrder(1);
+              filterRegistrationBean.addUrlPatterns("/*");
+              filterRegistrationBean.setDispatcherTypes(DispatcherType.REQUEST,
+      DispatcherType.ERROR);
+              return filterRegistrationBean;
+    }
+    ~~~
+    - setDispatcherTypes 메서드를 통해 필터를 적용할 dispatcherType 설정, 기본값은 REQUSET만
+#### 서블릿 예외처리 - 인터셉터
+1. 인터셉터의 경우 서블릿이 제공하는 기능이 아니라 스프링이 제공하는 기능이다. 따라서 DispatcherType과 무관하게 항상 호출됨
+2. 인터셉터 설정파일에서 오류페이지를 호출하는 경로를 excludePathPatterns를 사용하여 제외
+    ~~~
+    @Override
+      public void addInterceptors(InterceptorRegistry registry) {
+          registry.addInterceptor(new LogInterceptor())
+                  .order(1)
+                   .addPathPatterns("/**")
+                .excludePathPatterns(
+    "/css/**", "/*.ico"
+    , "/error", "/error-page/**" //오류 페이지 경로
+    );
+        //@Bean
+        public FilterRegistrationBean logFilter() {
+            FilterRegistrationBean<Filter> filterRegistrationBean = new
+    FilterRegistrationBean<>();
+    }
+    ~~~
+#### 스프링부트 오류페이지
+1. 스프링부트는 webServerCustomizer 생성, ErrorPage 설정, ErrorPageController 로직처리를 모두 기본으로 제공함
+2. 기본적으로 오류가 발생했을 때, /error를 요청
+3. 구체적인 에러페이지 파일명이 있으면 해당 View를 렌더링
+##### 뷰 선택 우선순위
+1. 뷰 템플릿
+    - resources/templates/error/500.html
+    - resources/templates/error/5xx.html
+2. 정적리소스
+    - resources/static/error/400.html
+    - resources/static/error/404.html
+    - resources/static/error/4xx.html
+3. 적용대상이 없을 때
+    - resources/templates/error.html
+
+***
